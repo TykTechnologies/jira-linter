@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"regexp"
 	"strings"
@@ -107,19 +108,31 @@ func validateBranchAndTitle(config *Config, branchName string) (string, error) {
 	return issueIDInBranch, nil
 }
 
-// getJiraClient creates a new Jira client with API token authentication.
+// getJiraClient creates a new Jira client with Basic authentication.
+// The API token should be a base64-encoded string of "email:api_token"
 func getJiraClient(config *Config) (*jira.Client, error) {
-	tp := jira.BasicAuthTransport{
-		Username: config.Jira.UserEmail,
-		Password: config.Jira.APIToken,
+	httpClient := &http.Client{
+		Transport: &basicAuthTransport{
+			Token: config.Jira.APIToken,
+		},
 	}
 
-	client, err := jira.NewClient(tp.Client(), config.Jira.BaseURL)
+	client, err := jira.NewClient(httpClient, config.Jira.BaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Jira client: %w", err)
 	}
 
 	return client, nil
+}
+
+// basicAuthTransport adds Basic Authentication header to requests
+type basicAuthTransport struct {
+	Token string
+}
+
+func (t *basicAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", t.Token))
+	return http.DefaultTransport.RoundTrip(req)
 }
 
 func findIssueID(input string) (string, error) {
