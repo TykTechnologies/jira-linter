@@ -23,7 +23,7 @@ var defaultAcceptedStatuses = map[string]bool{
 	"in dev":         true,
 	"in code review": true,
 	"ready for dev":  true,
-	"DoD Check":      true,
+	"dod check":      true,
 }
 
 // loadConfig loads and validates all environment configuration
