@@ -242,7 +242,7 @@ func parseCustomStatuses(statusString string) map[string]bool {
 
 // isValidStatus checks if the given status is in the accepted list (case-insensitive)
 func isValidStatus(status string, acceptedStatuses map[string]bool) bool {
-	return acceptedStatuses[strings.ToLower(status)]
+	return acceptedStatuses[strings.TrimSpace(strings.ToLower(status))]
 }
 
 // getAcceptedStatusList returns a formatted string of accepted statuses for error messages
