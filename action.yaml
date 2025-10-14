@@ -86,6 +86,7 @@ runs:
       with:
         header: jira-linter
         path: ${{ github.action_path }}/linter-output.txt
+        recreate: true
 
     - name: Delete Sticky Comment on Success
       if: steps.linter_step.outcome == 'success'
