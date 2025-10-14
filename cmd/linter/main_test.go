@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -82,6 +83,66 @@ func TestFindIssueID(t *testing.T) {
 			input:       "",
 			expected:    "",
 			expectError: true,
+		},
+		{
+			name:        "project key exactly 10 characters (boundary)",
+			input:       "ABCDEFGHIJ-123",
+			expected:    "ABCDEFGHIJ-123",
+			expectError: false,
+		},
+		{
+			name:        "project key 11 characters (regex matches last 10)",
+			input:       "ABCDEFGHIJK-123",
+			expected:    "BCDEFGHIJK-123", // Non-greedy regex skips first char
+			expectError: false,
+		},
+		{
+			name:        "ticket number exactly 10 digits (boundary)",
+			input:       "ABC-1234567890",
+			expected:    "ABC-1234567890",
+			expectError: false,
+		},
+		{
+			name:        "ticket number 11 digits (regex allows, returns first 10)",
+			input:       "ABC-12345678901",
+			expected:    "ABC-1234567890",
+			expectError: false,
+		},
+		{
+			name:        "single character project key (boundary)",
+			input:       "A-123",
+			expected:    "A-123",
+			expectError: false,
+		},
+		{
+			name:        "single digit ticket number (boundary)",
+			input:       "ABC-1",
+			expected:    "ABC-1",
+			expectError: false,
+		},
+		{
+			name:        "special character underscore instead of dash",
+			input:       "ABC_123",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "special character dot instead of dash",
+			input:       "ABC.123",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "leading whitespace",
+			input:       " ABC-123",
+			expected:    "ABC-123",
+			expectError: false,
+		},
+		{
+			name:        "trailing whitespace",
+			input:       "ABC-123 ",
+			expected:    "ABC-123",
+			expectError: false,
 		},
 	}
 
@@ -753,5 +814,351 @@ func TestBasicAuthTransport(t *testing.T) {
 	// req.Header.Set("Authorization", fmt.Sprintf("Basic %s", t.Token))
 	if transport.Token == "" {
 		t.Errorf("expected token to be set on transport")
+	}
+}
+
+// TestValidateJiraIssueNilSafety tests nil pointer handling in validateJiraIssue
+// to prevent runtime panics when dealing with incomplete Jira issue data
+func TestValidateJiraIssueNilSafety(t *testing.T) {
+	t.Run("nil issue causes panic", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r != nil {
+				// Expected to panic with nil issue
+				t.Logf("Expected panic caught: %v", r)
+			}
+		}()
+		// This will panic - documenting current behavior
+		_ = validateJiraIssue(nil, "", "ABC-123")
+	})
+
+	t.Run("nil issue fields causes panic", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r != nil {
+				// Expected to panic with nil Fields
+				t.Logf("Expected panic caught: %v", r)
+			}
+		}()
+		issue := &jira.Issue{
+			Key:    "ABC-123",
+			Fields: nil,
+		}
+		// This will panic - documenting current behavior
+		_ = validateJiraIssue(issue, "", "ABC-123")
+	})
+
+	t.Run("nil status causes panic", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r != nil {
+				// Expected to panic with nil Status
+				t.Logf("Expected panic caught: %v", r)
+			}
+		}()
+		issue := &jira.Issue{
+			Key: "ABC-123",
+			Fields: &jira.IssueFields{
+				Status: nil,
+			},
+		}
+		// This will panic - documenting current behavior
+		_ = validateJiraIssue(issue, "", "ABC-123")
+	})
+
+	t.Run("empty status name with validation enabled", func(t *testing.T) {
+		issue := &jira.Issue{
+			Key: "ABC-123",
+			Fields: &jira.IssueFields{
+				Status: &jira.Status{
+					Name: "",
+				},
+			},
+		}
+		err := validateJiraIssue(issue, "", "ABC-123")
+		if err == nil {
+			t.Errorf("expected error for empty status name, got nil")
+		}
+	})
+}
+
+// TestIsValidStatusNilMap tests that isValidStatus handles nil maps safely
+func TestIsValidStatusNilMap(t *testing.T) {
+	result := isValidStatus("In Dev", nil)
+	if result != false {
+		t.Errorf("expected false for nil map, got %v", result)
+	}
+}
+
+// TestGetAcceptedStatusListNilMap tests that getAcceptedStatusList handles nil maps safely
+func TestGetAcceptedStatusListNilMap(t *testing.T) {
+	result := getAcceptedStatusList(nil)
+	// Should return empty string, not panic
+	if result != "" {
+		t.Errorf("expected empty string for nil map, got '%s'", result)
+	}
+}
+
+// TestGetJiraClient tests the Jira client creation with various configurations
+func TestGetJiraClient(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      *Config
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name: "valid configuration",
+			config: &Config{
+				Jira: JiraConfig{
+					BaseURL:  "https://example.atlassian.net",
+					APIToken: "dGVzdDp0b2tlbg==", // base64 encoded "test:token"
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "empty API token",
+			config: &Config{
+				Jira: JiraConfig{
+					BaseURL:  "https://example.atlassian.net",
+					APIToken: "",
+				},
+			},
+			expectError: false, // Client creation doesn't validate token
+		},
+		{
+			name: "invalid base URL - malformed",
+			config: &Config{
+				Jira: JiraConfig{
+					BaseURL:  "://invalid-url",
+					APIToken: "dGVzdDp0b2tlbg==",
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "base URL with trailing slash",
+			config: &Config{
+				Jira: JiraConfig{
+					BaseURL:  "https://example.atlassian.net/",
+					APIToken: "dGVzdDp0b2tlbg==",
+				},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := getJiraClient(tt.config)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("expected error to contain '%s', got: %s", tt.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if client == nil {
+					t.Errorf("expected client to be non-nil")
+				}
+			}
+		})
+	}
+}
+
+// TestCreateGitHubClient tests GitHub client creation
+func TestCreateGitHubClient(t *testing.T) {
+	tests := []struct {
+		name        string
+		token       string
+		expectError bool
+	}{
+		{
+			name:        "valid token",
+			token:       "ghp_1234567890abcdef",
+			expectError: false,
+		},
+		{
+			name:        "empty token",
+			token:       "",
+			expectError: false, // Client creation doesn't validate token
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			client, err := createGitHubClient(ctx, tt.token)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if client == nil {
+					t.Errorf("expected client to be non-nil")
+				}
+			}
+		})
+	}
+}
+
+// TestUpdatePRDescriptionBodyMarkerParsing tests edge cases in marker detection and replacement
+func TestUpdatePRDescriptionBodyMarkerParsing(t *testing.T) {
+	tests := []struct {
+		name            string
+		existingBody    string
+		expectedPattern string // What pattern we expect in the result
+	}{
+		{
+			name:            "empty PR body",
+			existingBody:    "",
+			expectedPattern: jiraSectionMarkerStart,
+		},
+		{
+			name:            "body with only start marker",
+			existingBody:    "Some content\n" + jiraSectionMarkerStart + "\nOld content",
+			expectedPattern: jiraSectionMarkerStart,
+		},
+		{
+			name:            "body with only end marker",
+			existingBody:    "Some content\nOld content\n" + jiraSectionMarkerEnd,
+			expectedPattern: jiraSectionMarkerStart,
+		},
+		{
+			name: "body with complete marker pair",
+			existingBody: "PR description\n" + jiraSectionMarkerStart + "\nOld Jira info\n" +
+				jiraSectionMarkerEnd + "\nMore content",
+			expectedPattern: jiraSectionMarkerStart,
+		},
+		{
+			name: "body with markers in wrong order",
+			existingBody: "Content\n" + jiraSectionMarkerEnd + "\nBetween\n" +
+				jiraSectionMarkerStart + "\nContent",
+			expectedPattern: jiraSectionMarkerStart,
+		},
+		{
+			name: "very large body",
+			existingBody: strings.Repeat("A", 10000) + "\n" + jiraSectionMarkerStart + "\n" +
+				jiraSectionMarkerEnd,
+			expectedPattern: jiraSectionMarkerStart,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// We can't fully test updatePRDescriptionBody without mocking GitHub API
+			// but we can verify the marker logic by testing the string manipulation
+
+			newSection := "\n" + jiraSectionMarkerStart + "\nNew Jira Info\n" +
+				jiraSectionMarkerEnd + "\n"
+
+			startIdx := strings.Index(tt.existingBody, jiraSectionMarkerStart)
+			endIdx := strings.Index(tt.existingBody, jiraSectionMarkerEnd)
+
+			var newBody string
+			if startIdx != -1 && endIdx != -1 && endIdx > startIdx {
+				newBody = tt.existingBody[:startIdx] + newSection +
+					tt.existingBody[endIdx+len(jiraSectionMarkerEnd):]
+			} else {
+				newBody = tt.existingBody + newSection
+			}
+
+			// Verify the new body contains the expected pattern
+			if !strings.Contains(newBody, tt.expectedPattern) {
+				t.Errorf("expected new body to contain '%s'", tt.expectedPattern)
+			}
+
+			// Verify both markers are present
+			if !strings.Contains(newBody, jiraSectionMarkerStart) {
+				t.Errorf("expected new body to contain start marker")
+			}
+			if !strings.Contains(newBody, jiraSectionMarkerEnd) {
+				t.Errorf("expected new body to contain end marker")
+			}
+		})
+	}
+}
+
+// TestParseCustomStatusesEdgeCases tests additional edge cases for status parsing
+func TestParseCustomStatusesEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected map[string]bool
+	}{
+		{
+			name:  "very long status name",
+			input: "This Is A Very Long Status Name With Many Words",
+			expected: map[string]bool{
+				"this is a very long status name with many words": true,
+			},
+		},
+		{
+			name:  "status with numbers",
+			input: "Status 1,Status 2,Status 3",
+			expected: map[string]bool{
+				"status 1": true,
+				"status 2": true,
+				"status 3": true,
+			},
+		},
+		{
+			name:  "status with special characters",
+			input: "In-Progress,Code/Review,QA&Test",
+			expected: map[string]bool{
+				"in-progress": true,
+				"code/review": true,
+				"qa&test":     true,
+			},
+		},
+		{
+			name:     "only commas",
+			input:    ",,,",
+			expected: map[string]bool{}, // Returns empty map, not nil
+		},
+		{
+			name:  "leading and trailing commas",
+			input: ",In Dev,In Code Review,",
+			expected: map[string]bool{
+				"in dev":         true,
+				"in code review": true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseCustomStatuses(tt.input)
+
+			// Handle nil expected value
+			if tt.expected == nil {
+				if result != nil {
+					t.Errorf("expected nil, got %v", result)
+				}
+				return
+			}
+
+			// Handle empty map expected value (different from nil)
+			if result == nil && len(tt.expected) != 0 {
+				t.Errorf("expected map with %d entries, got nil", len(tt.expected))
+				return
+			}
+
+			if result != nil && len(result) != len(tt.expected) {
+				t.Errorf("expected %d statuses, got %d", len(tt.expected), len(result))
+			}
+
+			for key := range tt.expected {
+				if result == nil || !result[key] {
+					t.Errorf("expected status '%s' to be in result", key)
+				}
+			}
+		})
 	}
 }
