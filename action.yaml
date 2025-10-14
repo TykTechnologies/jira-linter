@@ -80,34 +80,19 @@ runs:
         <!-- jira-linter-comment-marker -->
         EOF
 
-    - name: Find Existing Failure Comment
-      if: steps.linter_step.outcome == 'failure' || steps.linter_step.outcome == 'success'
-      id: find_comment
-      uses: peter-evans/find-comment@v3
-      with:
-        issue-number: ${{ github.event.pull_request.number }}
-        comment-author: 'github-actions[bot]'
-        body-includes: 'jira-linter-comment-marker'
-        direction: last
-
-    - name: Create or Update Comment on Failure
+    - name: Post Sticky Comment on Failure
       if: steps.linter_step.outcome == 'failure'
-      uses: peter-evans/create-or-update-comment@v4
+      uses: marocchino/sticky-pull-request-comment@v2
       with:
-        token: ${{ github.token }}
-        issue-number: ${{ github.event.pull_request.number }}
-        comment-id: ${{ steps.find_comment.outputs.comment-id }}
-        body-path: ${{ github.action_path }}/linter-output.txt
-        edit-mode: replace
+        header: jira-linter
+        path: ${{ github.action_path }}/linter-output.txt
 
-    - name: Delete Previous Failure Comment
-      if: steps.linter_step.outcome == 'success' && steps.find_comment.outputs.comment-id
-      shell: bash
-      run: |
-        gh api repos/${{ github.repository }}/issues/comments/${{ steps.find_comment.outputs.comment-id }} \
-          --method DELETE
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
+    - name: Delete Sticky Comment on Success
+      if: steps.linter_step.outcome == 'success'
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        header: jira-linter
+        delete: true
 
     - name: Fail Action if Linter Failed
       if: steps.linter_step.outcome == 'failure'
