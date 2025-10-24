@@ -1,24 +1,28 @@
-name: 'Jira PR Validator'
-description: 'Ensures pull requests align with the Jira tickets'
+name: "Jira PR Validator"
+description: "Ensures pull requests align with the Jira tickets"
 
 inputs:
   jira-base-url:
-    description: 'The base URL of your Jira instance (e.g., https://your-org.atlassian.net).'
+    description: "The base URL of your Jira instance (e.g., https://your-org.atlassian.net)."
     required: true
   jira-user-email:
-    description: 'The email of the user account associated with the Jira API token.'
+    description: "The email of the user account associated with the Jira API token."
     required: true
   jira-api-token:
-    description: 'The API token for your Jira account.'
+    description: "The API token for your Jira account."
     required: true
+  go-version:
+    description: "The version of Go to use for building the linter."
+    default: "1.24.7"
+    required: false
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: '1.24.7'
+        go-version: ${{ inputs.go-version }}
 
     - name: Build Jira Linter
       shell: bash
