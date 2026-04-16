@@ -93,20 +93,29 @@ func run() error {
 }
 
 func validateBranchAndTitle(config *Config, branchName string) (string, error) {
-	issueIDInBranch, err := findIssueID(branchName)
-	if err != nil {
-		return "", fmt.Errorf("branch name '%s' must contain a valid Jira ticket ID (e.g., ABC-123)", branchName)
-	}
+	issueIDInBranch, branchErr := findIssueID(branchName)
+	issueIDInTitle, titleErr := findIssueID(config.PR.Title)
 
-	issueInTitle, err := findIssueID(config.PR.Title)
-	if err != nil {
-		return "", fmt.Errorf("PR title must contain the Jira ticket ID '%s'", issueIDInBranch)
-	}
-	if issueInTitle != issueIDInBranch {
-		return "", fmt.Errorf("PR title contains '%s' but branch has '%s' - they must match", issueInTitle, issueIDInBranch)
-	}
+	switch {
+	case branchErr == nil && titleErr == nil:
+		// Found in both; use branch, warn if they differ
+		if issueIDInTitle != issueIDInBranch {
+			logWarn("PR title contains '%s' but branch has '%s' - using branch value", issueIDInTitle, issueIDInBranch)
+		}
+		return issueIDInBranch, nil
 
-	return issueIDInBranch, nil
+	case branchErr == nil:
+		// Found only in branch
+		return issueIDInBranch, nil
+
+	case titleErr == nil:
+		// Found only in PR title
+		return issueIDInTitle, nil
+
+	default:
+		// Found in neither
+		return "", fmt.Errorf("neither branch name '%s' nor PR title '%s' contains a valid Jira ticket ID (e.g., ABC-123)", branchName, config.PR.Title)
+	}
 }
 
 // getJiraClient creates a new Jira client with Basic authentication.
@@ -331,6 +340,10 @@ func validateJiraIssue(issue *jira.Issue, customStatuses, issueID string) error 
 
 func log(msg string, args ...interface{}) {
 	fmt.Fprintf(os.Stdout, "[INFO] "+msg+"\n", args...)
+}
+
+func logWarn(msg string, args ...interface{}) {
+	fmt.Fprintf(os.Stdout, "[WARN] "+msg+"\n", args...)
 }
 
 func logError(msg string, args ...interface{}) {
