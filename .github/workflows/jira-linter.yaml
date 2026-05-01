@@ -14,7 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Lint PR based on attached Jira ticket
-        uses: TykTechnologies/jira-linter@v0.0.4
+        uses: TykTechnologies/jira-linter@main
         with:
           jira-base-url: https://tyktech.atlassian.net/
-          jira-api-token: ${{ secrets.JIRA_TOKEN }}
+          jira-user-email: ${{ secrets.JIRA_EMAIL }}
+          jira-token: ${{ secrets.JIRA_TOKEN }}

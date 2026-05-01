@@ -36,14 +36,14 @@ jobs:
         with:
           jira-base-url: 'https://your-org.atlassian.net'
           jira-user-email: 'your-email@example.com'
-          jira-api-token: ${{ secrets.JIRA_API_TOKEN }}
+          jira-token: ${{ secrets.JIRA_TOKEN }}
 ```
 
 **Inputs:**
 
 - `jira-base-url` (required): Base URL of your Jira instance
 - `jira-user-email` (required): Email associated with Jira API token
-- `jira-api-token` (required): Jira API token (store in GitHub secrets)
+- `jira-token` (required): Raw Jira API token (store in GitHub secrets)
 
 **Behavior:**
 
@@ -61,7 +61,8 @@ Set up environment variables:
 
 ```bash
 export JL_JIRA_BASEURL="https://your-domain.atlassian.net"
-export JL_JIRA_APITOKEN="<base64-encoded-email:api-token>"
+export JL_JIRA_EMAIL="your-email@example.com"
+export JL_JIRA_TOKEN="your-raw-api-token"
 export JL_PR_NUMBER=123
 export JL_PR_TITLE="ABC-123: Your PR title"
 export GITHUB_TOKEN="your-github-token"
@@ -97,11 +98,8 @@ linter -branch "chore/DEF-789-update-deps" -statuses ""
 ### Jira API Token
 
 1. Generate API token from [Atlassian Account Settings](https://id.atlassian.com/manage-profile/security/api-tokens)
-2. For command-line usage, encode it:
-   ```bash
-   echo -n "your-email@example.com:your-api-token" | base64
-   ```
-3. For GitHub Action, store the raw API token in GitHub Secrets
+2. For command-line usage, set `JL_JIRA_EMAIL` and `JL_JIRA_TOKEN` environment variables.
+3. For GitHub Action, store the raw API token in GitHub Secrets and pass it as `jira-token`.
 
 ### GitHub Token
 
