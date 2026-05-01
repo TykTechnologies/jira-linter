@@ -2,7 +2,7 @@ package main
 
 type JiraConfig struct {
 	BaseURL string
-	Email   string
+	UserEmail string
 	Token   string
 }
 

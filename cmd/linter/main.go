@@ -122,7 +122,7 @@ func validateBranchAndTitle(config *Config, branchName string) (string, error) {
 // getJiraClient creates a new Jira client with Basic authentication.
 // The API token is a raw token, which is base64-encoded with the email at runtime.
 func getJiraClient(config *Config) (*jira.Client, error) {
-	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", config.Jira.Email, config.Jira.Token)))
+	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", config.Jira.UserEmail, config.Jira.Token)))
 	httpClient := &http.Client{
 		Transport: &basicAuthTransport{
 			Token: auth,
