@@ -20,11 +20,12 @@ import (
 
 // defaultAcceptedStatuses defines the default JIRA statuses that are valid for active development
 var defaultAcceptedStatuses = map[string]bool{
-	"in dev":         true,
-	"in code review": true,
-	"ready for dev":  true,
-	"dod check":      true,
-	"merge":          true,
+	"in dev":           true,
+	"in code review":   true,
+	"ready for dev":    true,
+	"dod check":        true,
+	"merge":            true,
+	"in design review": true,
 }
 
 // loadConfig loads and validates all environment configuration
