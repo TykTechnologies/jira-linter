@@ -1,8 +1,9 @@
 package main
 
 type JiraConfig struct {
-	BaseURL  string
-	APIToken string
+	BaseURL   string
+	UserEmail string
+	APIToken  string
 }
 
 type PRConfig struct {
