@@ -40,6 +40,14 @@ func loadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to validate Jira base URL, cannot be empty or whitespace")
 	}
 
+	if strings.TrimSpace(config.Jira.UserEmail) == "" {
+		return nil, fmt.Errorf("Jira user email is required for API authentication")
+	}
+
+	if strings.TrimSpace(config.Jira.APIToken) == "" {
+		return nil, fmt.Errorf("Jira API token is required for API authentication")
+	}
+
 	if config.PR.Number <= 0 {
 		return nil, fmt.Errorf("PR number must be a positive integer")
 	}
