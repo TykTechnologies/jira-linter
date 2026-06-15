@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"net/http"
@@ -37,6 +38,14 @@ func loadConfig() (*Config, error) {
 
 	if strings.TrimSpace(config.Jira.BaseURL) == "" {
 		return nil, fmt.Errorf("failed to validate Jira base URL, cannot be empty or whitespace")
+	}
+
+	if strings.TrimSpace(config.Jira.UserEmail) == "" {
+		return nil, fmt.Errorf("Jira user email is required for API authentication")
+	}
+
+	if strings.TrimSpace(config.Jira.APIToken) == "" {
+		return nil, fmt.Errorf("Jira API token is required for API authentication")
 	}
 
 	if config.PR.Number <= 0 {
@@ -120,12 +129,11 @@ func validateBranchAndTitle(config *Config, branchName string) (string, error) {
 	}
 }
 
-// getJiraClient creates a new Jira client with Basic authentication.
-// The API token should be a base64-encoded string of "email:api_token"
 func getJiraClient(config *Config) (*jira.Client, error) {
 	httpClient := &http.Client{
 		Transport: &basicAuthTransport{
-			Token: config.Jira.APIToken,
+			Email:    config.Jira.UserEmail,
+			APIToken: config.Jira.APIToken,
 		},
 	}
 
@@ -137,25 +145,26 @@ func getJiraClient(config *Config) (*jira.Client, error) {
 	return client, nil
 }
 
-// basicAuthTransport adds Basic Authentication header to requests
 type basicAuthTransport struct {
-	Token string
+	Email    string
+	APIToken string
 }
 
 func (t *basicAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", t.Token))
+	creds := base64.StdEncoding.EncodeToString([]byte(t.Email + ":" + t.APIToken))
+	req.Header.Set("Authorization", "Basic "+creds)
 	return http.DefaultTransport.RoundTrip(req)
 }
 
 func findIssueID(input string) (string, error) {
-	re := regexp.MustCompile(`^.*?([A-Z]{1,10}-[0-9]{1,10}).*?$`)
+	re := regexp.MustCompile(`(?i)^.*?([A-Z]{1,10}-[0-9]{1,10}).*?$`)
 	match := re.FindStringSubmatch(input)
 
 	if len(match) < 2 {
 		return "", fmt.Errorf("no valid Jira ticket ID found")
 	}
 
-	return match[1], nil
+	return strings.ToUpper(match[1]), nil
 }
 
 func createGitHubClient(ctx context.Context, token string) (*github.Client, error) {
@@ -274,8 +283,11 @@ func getJiraIssue(config *Config, issueID string) (*jira.Issue, error) {
 		return nil, fmt.Errorf("failed to create Jira client: %w", err)
 	}
 
-	issue, _, err := jiraClient.Issue.Get(issueID, nil)
+	issue, resp, err := jiraClient.Issue.Get(issueID, nil)
 	if err != nil {
+		if resp != nil && resp.StatusCode == 404 {
+			return nil, fmt.Errorf("Jira issue %s not found (HTTP 404). The issue may exist but the API token may lack permission to access it. Verify that the token owner has access to the project and that JL_JIRA_BASEURL (%s) is correct", issueID, config.Jira.BaseURL)
+		}
 		return nil, fmt.Errorf("failed to fetch Jira issue %s: %w", issueID, err)
 	}
 

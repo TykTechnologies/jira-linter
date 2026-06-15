@@ -11,10 +11,12 @@ permissions:
 
 jobs:
   lint-pr:
-    runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ${{ vars.DEFAULT_RUNNER }}
     steps:
       - name: Lint PR based on attached Jira ticket
-        uses: TykTechnologies/jira-linter@v0.0.4
+        uses: TykTechnologies/jira-linter@main
         with:
-          jira-base-url: https://tyktech.atlassian.net/
+          jira-base-url: 'https://tyktech.atlassian.net'
+          jira-user-email: ${{ secrets.JIRA_USER_EMAIL }}
           jira-api-token: ${{ secrets.JIRA_TOKEN }}
